@@ -48,6 +48,15 @@ static NSString *const timedMetadata = @"timedMetadata";
   UIViewController * _presentingViewController;
 }
 
+static NSMutableDictionary *_playerCache = nil;
+
++ (NSMutableDictionary*)playerCache {
+    if(_playerCache == nil) {
+        _playerCache = [NSMutableDictionary dictionary];
+    }
+    return _playerCache;
+}
+
 - (instancetype)initWithEventDispatcher:(RCTEventDispatcher *)eventDispatcher
 {
   if ((self = [super init])) {
@@ -247,13 +256,59 @@ static NSString *const timedMetadata = @"timedMetadata";
 
 #pragma mark - Player and source
 
++ (void)preloadSrc:(NSDictionary *)source {
+    NSString *uri = [source objectForKey:@"uri"];
+    if(![RCTVideo.playerCache objectForKey:uri]) {
+        AVPlayerItem *item = [self playerItemForSource:source];
+        AVPlayer *player = [AVPlayer playerWithPlayerItem:item];
+        [RCTVideo.playerCache setObject:player forKey:uri];
+    }
+}
+
 - (void)setSrc:(NSDictionary *)source
 {
-  [self removePlayerTimeObserver];
-  [self removePlayerItemObservers];
-  _playerItem = [self playerItemForSource:source];
-  [self addPlayerItemObservers];
+    NSString *uri = [source objectForKey:@"uri"];
+    AVPlayer *cachedPlayer = [RCTVideo.playerCache objectForKey:uri];
+    if(cachedPlayer) {
+        AVPlayerItem *item = cachedPlayer.currentItem;
+        [self _setPlayerItem:item];
+        [self _setPlayer:cachedPlayer];
+        [self attachListeners];
+        [self applyModifiers];
+        [self setSeek: 0];
+    }
+    else {
+        [self _setPlayerItem:[RCTVideo playerItemForSource:source]];
+        [self _setPlayer:[AVPlayer playerWithPlayerItem:_playerItem]];
 
+        [RCTVideo.playerCache setObject:_player forKey:uri];
+    }
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      //Perform on next run loop, otherwise onVideoLoadStart is nil
+      if(self.onVideoLoadStart) {
+        id uri = [source objectForKey:@"uri"];
+        id type = [source objectForKey:@"type"];
+        self.onVideoLoadStart(@{@"src": @{
+                                          @"uri": uri ? uri : [NSNull null],
+                                          @"type": type ? type : [NSNull null],
+                                          @"isNetwork": [NSNumber numberWithBool:(bool)[source objectForKey:@"isNetwork"]]},
+                                          @"target": self.reactTag
+                                          });
+      }
+    });
+}
+
+- (void)_setPlayerItem:(AVPlayerItem *)item
+{
+    [self removePlayerTimeObserver];
+    [self removePlayerItemObservers];
+    _playerItem = item;
+    [self addPlayerItemObservers];
+}
+
+- (void)_setPlayer:(AVPlayer *)player
+{
   [_player pause];
   [self removePlayerLayer];
   [_playerViewController.view removeFromSuperview];
@@ -263,8 +318,7 @@ static NSString *const timedMetadata = @"timedMetadata";
     [_player removeObserver:self forKeyPath:playbackRate context:nil];
     _playbackRateObserverRegistered = NO;
   }
-
-  _player = [AVPlayer playerWithPlayerItem:_playerItem];
+  _player = player;
   _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
 
   [_player addObserver:self forKeyPath:playbackRate options:0 context:nil];
@@ -277,23 +331,9 @@ static NSString *const timedMetadata = @"timedMetadata";
                                                         queue:NULL
                                                    usingBlock:^(CMTime time) { [weakSelf sendProgressUpdate]; }
                    ];
-
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-    //Perform on next run loop, otherwise onVideoLoadStart is nil
-    if(self.onVideoLoadStart) {
-      id uri = [source objectForKey:@"uri"];
-      id type = [source objectForKey:@"type"];
-      self.onVideoLoadStart(@{@"src": @{
-                                        @"uri": uri ? uri : [NSNull null],
-                                        @"type": type ? type : [NSNull null],
-                                        @"isNetwork": [NSNumber numberWithBool:(bool)[source objectForKey:@"isNetwork"]]},
-                                        @"target": self.reactTag
-                                        });
-    }
-  });
 }
 
-- (AVPlayerItem*)playerItemForSource:(NSDictionary *)source
++ (AVPlayerItem*)playerItemForSource:(NSDictionary *)source
 {
   bool isNetwork = [RCTConvert BOOL:[source objectForKey:@"isNetwork"]];
   bool isAsset = [RCTConvert BOOL:[source objectForKey:@"isAsset"]];
@@ -393,8 +433,6 @@ static NSString *const timedMetadata = @"timedMetadata";
                                      },
                              @"target": self.reactTag});
       }
-
-
         [self attachListeners];
         [self applyModifiers];
       } else if(_playerItem.status == AVPlayerItemStatusFailed && self.onVideoError) {
