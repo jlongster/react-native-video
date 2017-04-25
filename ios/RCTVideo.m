@@ -20,6 +20,7 @@ static NSString *const timedMetadata = @"timedMetadata";
   AVPlayerLayer *_playerLayer;
   AVPlayerViewController *_playerViewController;
   NSURL *_videoURL;
+  NSMutableDictionary *_playerCache;
 
   /* Required to publish events */
   RCTEventDispatcher *_eventDispatcher;
@@ -48,16 +49,7 @@ static NSString *const timedMetadata = @"timedMetadata";
   UIViewController * _presentingViewController;
 }
 
-static NSMutableDictionary *_playerCache = nil;
-
-+ (NSMutableDictionary*)playerCache {
-    if(_playerCache == nil) {
-        _playerCache = [NSMutableDictionary dictionary];
-    }
-    return _playerCache;
-}
-
-- (instancetype)initWithEventDispatcher:(RCTEventDispatcher *)eventDispatcher
+- (instancetype)initWithEventDispatcher:(RCTEventDispatcher *)eventDispatcher playerCache:(NSMutableDictionary *)playerCache
 {
   if ((self = [super init])) {
     _eventDispatcher = eventDispatcher;
@@ -75,6 +67,7 @@ static NSMutableDictionary *_playerCache = nil;
     _playerBufferEmpty = YES;
     _playInBackground = false;
     _playWhenInactive = false;
+    _playerCache = playerCache;
 
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(applicationWillResignActive:)
@@ -256,19 +249,10 @@ static NSMutableDictionary *_playerCache = nil;
 
 #pragma mark - Player and source
 
-+ (void)preloadSrc:(NSDictionary *)source {
-    NSString *uri = [source objectForKey:@"uri"];
-    if(![RCTVideo.playerCache objectForKey:uri]) {
-        AVPlayerItem *item = [self playerItemForSource:source];
-        AVPlayer *player = [AVPlayer playerWithPlayerItem:item];
-        [RCTVideo.playerCache setObject:player forKey:uri];
-    }
-}
-
 - (void)setSrc:(NSDictionary *)source
 {
     NSString *uri = [source objectForKey:@"uri"];
-    AVPlayer *cachedPlayer = [RCTVideo.playerCache objectForKey:uri];
+    AVPlayer *cachedPlayer = [_playerCache objectForKey:uri];
     if(cachedPlayer) {
         AVPlayerItem *item = cachedPlayer.currentItem;
         [self _setPlayerItem:item];
@@ -281,7 +265,7 @@ static NSMutableDictionary *_playerCache = nil;
         [self _setPlayerItem:[RCTVideo playerItemForSource:source]];
         [self _setPlayer:[AVPlayer playerWithPlayerItem:_playerItem]];
 
-        [RCTVideo.playerCache setObject:_player forKey:uri];
+        [_playerCache setObject:_player forKey:uri];
     }
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{

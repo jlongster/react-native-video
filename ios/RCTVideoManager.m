@@ -5,13 +5,32 @@
 
 @implementation RCTVideoManager
 
-RCT_EXPORT_MODULE();
+RCT_EXPORT_MODULE(VideoManager);
 
 @synthesize bridge = _bridge;
 
+static NSMutableDictionary *_playerCache = nil;
+
++ (NSMutableDictionary*)playerCache {
+    if(_playerCache == nil) {
+        _playerCache = [NSMutableDictionary dictionary];
+    }
+    return _playerCache;
+}
+
+RCT_EXPORT_METHOD(preloadSrc:(NSDictionary *)source) {
+    NSString *uri = [source objectForKey:@"uri"];
+    if(![RCTVideoManager.playerCache objectForKey:uri]) {
+        AVPlayerItem *item = [RCTVideo playerItemForSource:source];
+        AVPlayer *player = [AVPlayer playerWithPlayerItem:item];
+        [RCTVideoManager.playerCache setObject:player forKey:uri];
+    }
+}
+
 - (UIView *)view
 {
-  return [[RCTVideo alloc] initWithEventDispatcher:self.bridge.eventDispatcher];
+    return [[RCTVideo alloc] initWithEventDispatcher:self.bridge.eventDispatcher
+                             playerCache:RCTVideoManager.playerCache];
 }
 
 - (dispatch_queue_t)methodQueue
