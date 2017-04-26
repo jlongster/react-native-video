@@ -273,8 +273,8 @@ static NSMutableDictionary *_playerCache = nil;
         AVPlayerItem *item = cachedPlayer.currentItem;
         [self _setPlayerItem:item];
         [self _setPlayer:cachedPlayer];
-        [self attachListeners];
         [self applyModifiers];
+        [self attachListeners];
         [self setSeek: 0];
     }
     else {
@@ -433,8 +433,10 @@ static NSMutableDictionary *_playerCache = nil;
                                      },
                              @"target": self.reactTag});
       }
-        [self attachListeners];
-        [self applyModifiers];
+
+      [self attachListeners];
+      [self applyModifiers];
+
       } else if(_playerItem.status == AVPlayerItemStatusFailed && self.onVideoError) {
         self.onVideoError(@{@"error": @{@"code": [NSNumber numberWithInteger: _playerItem.error.code],
                                         @"domain": _playerItem.error.domain},
@@ -478,6 +480,14 @@ static NSMutableDictionary *_playerCache = nil;
 
 - (void)attachListeners
 {
+  // Remove any existing observers
+  [[NSNotificationCenter defaultCenter] removeObserver:self
+                                               name:AVPlayerItemDidPlayToEndTimeNotification
+                                             object:[_player currentItem]];
+  [[NSNotificationCenter defaultCenter] removeObserver:self
+                                               name:AVPlayerItemPlaybackStalledNotification
+                                             object:[_player currentItem]];
+
   // listen for end of file
   [[NSNotificationCenter defaultCenter] addObserver:self
                                            selector:@selector(playerItemDidReachEnd:)
