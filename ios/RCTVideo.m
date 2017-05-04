@@ -273,9 +273,16 @@ static NSMutableDictionary *_playerCache = nil;
         AVPlayerItem *item = cachedPlayer.currentItem;
         [self _setPlayerItem:item];
         [self _setPlayer:cachedPlayer];
-        [self applyModifiers];
-        [self attachListeners];
         [self setSeek: 0];
+
+        if (item.status == AVPlayerItemStatusReadyToPlay) {
+            // The onLoad property may not be set yet, as we are in
+            // the `source` setter here. Wait for one tick to dispatch
+            // the load event.
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self emitLoadEvent];
+            });            
+        }
     }
     else {
         [self _setPlayerItem:[RCTVideo playerItemForSource:source]];
@@ -392,51 +399,7 @@ static NSMutableDictionary *_playerCache = nil;
     if ([keyPath isEqualToString:statusKeyPath]) {
       // Handle player item status change.
       if (_playerItem.status == AVPlayerItemStatusReadyToPlay) {
-        float duration = CMTimeGetSeconds(_playerItem.asset.duration);
-
-        if (isnan(duration)) {
-          duration = 0.0;
-        }
-
-        NSObject *width = @"undefined";
-        NSObject *height = @"undefined";
-        NSString *orientation = @"undefined";
-
-        if ([_playerItem.asset tracksWithMediaType:AVMediaTypeVideo].count > 0) {
-          AVAssetTrack *videoTrack = [[_playerItem.asset tracksWithMediaType:AVMediaTypeVideo] objectAtIndex:0];
-          width = [NSNumber numberWithFloat:videoTrack.naturalSize.width];
-          height = [NSNumber numberWithFloat:videoTrack.naturalSize.height];
-          CGAffineTransform preferredTransform = [videoTrack preferredTransform];
-
-          if ((videoTrack.naturalSize.width == preferredTransform.tx
-            && videoTrack.naturalSize.height == preferredTransform.ty)
-            || (preferredTransform.tx == 0 && preferredTransform.ty == 0))
-          {
-            orientation = @"landscape";
-          } else
-            orientation = @"portrait";
-        }
-          
-      if(self.onVideoLoad) {
-          self.onVideoLoad(@{@"duration": [NSNumber numberWithFloat:duration],
-                             @"currentTime": [NSNumber numberWithFloat:CMTimeGetSeconds(_playerItem.currentTime)],
-                             @"canPlayReverse": [NSNumber numberWithBool:_playerItem.canPlayReverse],
-                             @"canPlayFastForward": [NSNumber numberWithBool:_playerItem.canPlayFastForward],
-                             @"canPlaySlowForward": [NSNumber numberWithBool:_playerItem.canPlaySlowForward],
-                             @"canPlaySlowReverse": [NSNumber numberWithBool:_playerItem.canPlaySlowReverse],
-                             @"canStepBackward": [NSNumber numberWithBool:_playerItem.canStepBackward],
-                             @"canStepForward": [NSNumber numberWithBool:_playerItem.canStepForward],
-                             @"naturalSize": @{
-                                     @"width": width,
-                                     @"height": height,
-                                     @"orientation": orientation
-                                     },
-                             @"target": self.reactTag});
-      }
-
-      [self attachListeners];
-      [self applyModifiers];
-
+          [self emitLoadEvent];
       } else if(_playerItem.status == AVPlayerItemStatusFailed && self.onVideoError) {
         self.onVideoError(@{@"error": @{@"code": [NSNumber numberWithInteger: _playerItem.error.code],
                                         @"domain": _playerItem.error.domain},
@@ -476,6 +439,54 @@ static NSMutableDictionary *_playerCache = nil;
   } else {
       [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
   }
+}
+
+- (void)emitLoadEvent
+{
+    float duration = CMTimeGetSeconds(_playerItem.asset.duration);
+
+    if (isnan(duration)) {
+        duration = 0.0;
+    }
+
+    NSObject *width = @"undefined";
+    NSObject *height = @"undefined";
+    NSString *orientation = @"undefined";
+
+    if ([_playerItem.asset tracksWithMediaType:AVMediaTypeVideo].count > 0) {
+        AVAssetTrack *videoTrack = [[_playerItem.asset tracksWithMediaType:AVMediaTypeVideo] objectAtIndex:0];
+        width = [NSNumber numberWithFloat:videoTrack.naturalSize.width];
+        height = [NSNumber numberWithFloat:videoTrack.naturalSize.height];
+        CGAffineTransform preferredTransform = [videoTrack preferredTransform];
+
+        if ((videoTrack.naturalSize.width == preferredTransform.tx
+             && videoTrack.naturalSize.height == preferredTransform.ty)
+            || (preferredTransform.tx == 0 && preferredTransform.ty == 0))
+            {
+                orientation = @"landscape";
+            } else
+            orientation = @"portrait";
+    }
+
+    if(self.onVideoLoad) {
+        self.onVideoLoad(@{@"duration": [NSNumber numberWithFloat:duration],
+                    @"currentTime": [NSNumber numberWithFloat:CMTimeGetSeconds(_playerItem.currentTime)],
+                    @"canPlayReverse": [NSNumber numberWithBool:_playerItem.canPlayReverse],
+                    @"canPlayFastForward": [NSNumber numberWithBool:_playerItem.canPlayFastForward],
+                    @"canPlaySlowForward": [NSNumber numberWithBool:_playerItem.canPlaySlowForward],
+                    @"canPlaySlowReverse": [NSNumber numberWithBool:_playerItem.canPlaySlowReverse],
+                    @"canStepBackward": [NSNumber numberWithBool:_playerItem.canStepBackward],
+                    @"canStepForward": [NSNumber numberWithBool:_playerItem.canStepForward],
+                    @"naturalSize": @{
+                    @"width": width,
+                        @"height": height,
+                        @"orientation": orientation
+                        },
+                    @"target": self.reactTag});
+    }
+
+    [self attachListeners];
+    [self applyModifiers];
 }
 
 - (void)attachListeners
