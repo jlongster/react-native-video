@@ -17,6 +17,7 @@ static NSString *const timedMetadata = @"timedMetadata";
   AVPlayerItem *_playerItem;
   BOOL _playerItemObserversSet;
   BOOL _playerBufferEmpty;
+  BOOL _loaded;
   AVPlayerLayer *_playerLayer;
   AVPlayerViewController *_playerViewController;
   NSURL *_videoURL;
@@ -267,6 +268,7 @@ static NSMutableDictionary *_playerCache = nil;
 
 - (void)setSrc:(NSDictionary *)source
 {
+    _loaded = NO;
     NSString *uri = [source objectForKey:@"uri"];
     AVPlayer *cachedPlayer = [RCTVideo.playerCache objectForKey:uri];
     if(cachedPlayer) {
@@ -398,7 +400,7 @@ static NSMutableDictionary *_playerCache = nil;
 
     if ([keyPath isEqualToString:statusKeyPath]) {
       // Handle player item status change.
-      if (_playerItem.status == AVPlayerItemStatusReadyToPlay) {
+      if (_playerItem.status == AVPlayerItemStatusReadyToPlay && _playerItem.playbackLikelyToKeepUp) {
           [self emitLoadEvent];
       } else if(_playerItem.status == AVPlayerItemStatusFailed && self.onVideoError) {
         self.onVideoError(@{@"error": @{@"code": [NSNumber numberWithInteger: _playerItem.error.code],
@@ -409,17 +411,24 @@ static NSMutableDictionary *_playerCache = nil;
       _playerBufferEmpty = YES;
       self.onVideoBuffer(@{@"isBuffering": @(YES), @"target": self.reactTag});
     } else if ([keyPath isEqualToString:playbackLikelyToKeepUpKeyPath]) {
-      // Continue playing (or not if paused) after being paused due to hitting an unbuffered zone.
-      if ((!(_controls || _fullscreenPlayerPresented) || _playerBufferEmpty) && _playerItem.playbackLikelyToKeepUp) {
-        [self setPaused:_paused];
-      }
-      _playerBufferEmpty = NO;
-      self.onVideoBuffer(@{@"isBuffering": @(NO), @"target": self.reactTag});
+        if (!_loaded) {
+            if(_playerItem.status == AVPlayerItemStatusReadyToPlay && _playerItem.playbackLikelyToKeepUp) {
+                [self emitLoadEvent];
+            }
+        }
+        else {
+            // Continue playing (or not if paused) after being paused due to hitting an unbuffered zone.
+            if ((!(_controls || _fullscreenPlayerPresented) || _playerBufferEmpty) && _playerItem.playbackLikelyToKeepUp) {
+                [self setPaused:_paused];
+            }
+            _playerBufferEmpty = NO;
+            self.onVideoBuffer(@{@"isBuffering": @(NO), @"target": self.reactTag});
+        }
     }
    } else if (object == _playerLayer) {
       if([keyPath isEqualToString:readyForDisplayKeyPath] && [change objectForKey:NSKeyValueChangeNewKey]) {
         if([change objectForKey:NSKeyValueChangeNewKey] && self.onReadyForDisplay) {
-          self.onReadyForDisplay(@{@"target": self.reactTag});
+            self.onReadyForDisplay(@{@"target": self.reactTag});
         }
     }
   } else if (object == _player) {
@@ -443,6 +452,10 @@ static NSMutableDictionary *_playerCache = nil;
 
 - (void)emitLoadEvent
 {
+    if(_loaded) {
+        return;
+    }
+    _loaded = YES;
     float duration = CMTimeGetSeconds(_playerItem.asset.duration);
 
     if (isnan(duration)) {
