@@ -23,6 +23,10 @@ export default class Video extends Component {
     this._root.setNativeProps(nativeProps);
   }
 
+  preload = (url) => {
+    this.setNativeProps({ preload: url });
+  };
+
   seek = (time) => {
     this.setNativeProps({ seek: time });
   };
@@ -248,6 +252,7 @@ Video.propTypes = {
   src: PropTypes.object,
   seek: PropTypes.number,
   fullscreen: PropTypes.bool,
+  preload: PropTypes.string,
   onVideoLoadStart: PropTypes.func,
   onVideoLoad: PropTypes.func,
   onVideoBuffer: PropTypes.func,
