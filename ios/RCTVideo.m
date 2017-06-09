@@ -298,6 +298,7 @@ static NSString *const timedMetadata = @"timedMetadata";
         [_player replaceCurrentItemWithPlayerItem:nil];
         [prevItem seekToTime:kCMTimeZero];
         [self removePlayerTimeObserver];
+        [self _disappear];
         return;
     }
 
