@@ -12,6 +12,7 @@
 
 @property (nonatomic, strong) NSMapTable *pendingRequests; // Dictionary of NSURLConnections to RCTAssetResponses
 @property (nonatomic, strong) NSMutableSet *cachedFragments; // Set of NSStrings (file paths)
+@property (nonatomic, strong) NSMutableArray *memoryCache;
 @property (nonatomic, copy) NSString *cachePath;
 
 @end
@@ -40,6 +41,7 @@
         }();
         _sharedInstance.cachedFragments = [NSMutableSet setWithArray:[[NSFileManager defaultManager] contentsOfDirectoryAtPath:_sharedInstance.cachePath error:nil]];
         _sharedInstance.pendingRequests = [NSMapTable new];
+        _sharedInstance.memoryCache = [NSMutableArray new];
     });
     return _sharedInstance;
 }
@@ -47,7 +49,7 @@
 - (NSString *)localStringFromRemoteString:(NSString *)string
 {
     NSCharacterSet* invalid = [NSCharacterSet characterSetWithCharactersInString:@"/\\?%*|\"<>"];
-    return [[string componentsSeparatedByCharactersInSet:invalid] componentsJoinedByString:@"-"];
+    return [[string componentsSeparatedByCharactersInSet:invalid] componentsJoinedByString:@"------"];
 }
 
 #pragma mark - NSURLConnection delegate
@@ -70,7 +72,7 @@
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSData *)data
 {
-    NSLog(@"FAILED");
+    NSLog(@"Request failed");
 }
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
@@ -83,6 +85,17 @@
     NSString *cachedFilePath = [self.cachePath stringByAppendingPathComponent:localName];
     [self.cachedFragments addObject:localName];
     [assetResponse.data writeToFile:cachedFilePath atomically:YES];
+
+    NSString *url = assetResponse.loadingRequest.request.URL.absoluteString;
+    [self addToMemoryCache:assetResponse.data url:url];
+}
+
+- (void)addToMemoryCache:(NSData *)data url:(NSString *)url
+{
+    if([self.memoryCache count] > 4) {
+        [self.memoryCache removeObjectAtIndex: 0];
+    }
+    [self.memoryCache addObject:@{@"data": data, @"url": url}];
 }
 
 #pragma mark - AVURLAsset resource loading
@@ -141,23 +154,35 @@
     long long endOffset = startOffset + dataRequest.requestedLength;
     BOOL didRespondFully = assetResponse.data.length >= endOffset;
 
-    NSLog(@"%@ - Requested %lli to %li, have %li", assetResponse.loadingRequest.request.URL.absoluteString, dataRequest.currentOffset, (long)dataRequest.requestedLength, (unsigned long)assetResponse.data.length);
-
     return didRespondFully || assetResponse.finished;
 }
 
 
 - (BOOL)resourceLoader:(AVAssetResourceLoader *)resourceLoader shouldWaitForLoadingOfRequestedResource:(AVAssetResourceLoadingRequest *)loadingRequest
 {
-    NSLog(@"shouldWaitForLoadingOfRequestedResource %@", loadingRequest.request.URL.absoluteString);
+    NSLog(@"shouldWaitForLoadingOfRequestedResource %@ %d %d", loadingRequest.request.URL.absoluteString, loadingRequest.dataRequest.requestedOffset, loadingRequest.dataRequest.requestedLength);
     // start downloading the fragment.
-    NSURL *interceptedURL = [loadingRequest.request URL];
+    NSURL *interceptedURL = loadingRequest.request.URL;
 
     NSURLComponents *actualURLComponents = [[NSURLComponents alloc] initWithURL:interceptedURL resolvingAgainstBaseURL:NO];
     actualURLComponents.scheme = [actualURLComponents.scheme stringByReplacingOccurrencesOfString:@"custom-" withString:@""];
     NSString *absoluteURL = actualURLComponents.URL.absoluteString;
 
     NSString *localFile = [self localStringFromRemoteString:absoluteURL];
+
+    for(NSDictionary *dict in self.memoryCache) {
+        if([[dict objectForKey:@"url"] isEqualToString:interceptedURL.absoluteString]) {
+            NSData *data = [dict objectForKey:@"data"];
+            loadingRequest.contentInformationRequest.contentLength = data.length;
+            loadingRequest.contentInformationRequest.contentType = @"video/mpegts";
+            loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
+            [loadingRequest.dataRequest respondWithData:[data subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, MIN(loadingRequest.dataRequest.requestedLength, data.length))]];
+            [loadingRequest finishLoading];
+            NSLog(@"Responded with memory cached data for %@", interceptedURL.absoluteString);
+            return YES;
+        }
+    }
+    
     if ([self.cachedFragments containsObject:localFile] && ![localFile hasSuffix:@".ts"])
     {
         NSData *fileData = [[NSFileManager defaultManager] contentsAtPath:[self.cachePath stringByAppendingPathComponent:localFile]];
@@ -166,7 +191,9 @@
         loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
         [loadingRequest.dataRequest respondWithData:[fileData subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, MIN(loadingRequest.dataRequest.requestedLength, fileData.length))]];
         [loadingRequest finishLoading];
-        NSLog(@"Responded with cached data for %@", actualURLComponents.URL.absoluteString);
+        [self addToMemoryCache:fileData url: interceptedURL.absoluteString];
+
+        NSLog(@"Responded with cached data for %@", interceptedURL.absoluteString);
         return YES;
     }
 

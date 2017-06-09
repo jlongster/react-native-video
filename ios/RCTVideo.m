@@ -273,6 +273,10 @@ static NSString *const timedMetadata = @"timedMetadata";
 
     AVURLAsset *asset = [AVURLAsset URLAssetWithURL:components.URL options:nil];
     [asset.resourceLoader setDelegate:[RCTVideoLoader sharedInstance] queue:dispatch_get_main_queue()];
+
+    // Start loading the resource immediately
+    [asset loadValuesAsynchronouslyForKeys:@[@"playable"] completionHandler:^() {}];
+    
     return [AVPlayerItem playerItemWithAsset:asset];
 }
 
