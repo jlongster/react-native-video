@@ -293,6 +293,7 @@ static NSString *const timedMetadata = @"timedMetadata";
         AVPlayerItem *prevItem = _player.currentItem;
         [_player replaceCurrentItemWithPlayerItem:nil];
         [prevItem seekToTime:kCMTimeZero];
+        [self removePlayerTimeObserver];
         return;
     }
 
@@ -314,6 +315,8 @@ static NSString *const timedMetadata = @"timedMetadata";
         [_player replaceCurrentItemWithPlayerItem:item];
         [prevItem seekToTime:kCMTimeZero];
     }
+
+    [self addPlayerTimeObservers];
 
     dispatch_async(dispatch_get_main_queue(), ^{
       // Perform on next run loop, otherwise onVideoLoadStart is nil
@@ -345,22 +348,22 @@ static NSString *const timedMetadata = @"timedMetadata";
 
 - (void)_setPlayerItem:(AVPlayerItem *)item
 {
-    [self removePlayerTimeObserver];
     [self removePlayerItemObservers];
     _playerItem = item;
     [self addPlayerItemObservers];
-    [self addPlayerTimeObservers];
 }
 
 - (void)addPlayerTimeObservers
 {
-  const Float64 progressUpdateIntervalMS = _progressUpdateInterval / 1000;
-  // @see endScrubbing in AVPlayerDemoPlaybackViewController.m of https://developer.apple.com/library/ios/samplecode/AVPlayerDemo/Introduction/Intro.html
-  __weak RCTVideo *weakSelf = self;
-  _timeObserver = [_player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(progressUpdateIntervalMS, NSEC_PER_SEC)
-                                                   queue:NULL
-                                                   usingBlock:^(CMTime time) { [weakSelf sendProgressUpdate]; }
-                   ];
+  if(_timeObserver == nil) {
+      const Float64 progressUpdateIntervalMS = _progressUpdateInterval / 1000;
+      // @see endScrubbing in AVPlayerDemoPlaybackViewController.m of https://developer.apple.com/library/ios/samplecode/AVPlayerDemo/Introduction/Intro.html
+      __weak RCTVideo *weakSelf = self;
+      _timeObserver = [_player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(progressUpdateIntervalMS, NSEC_PER_SEC)
+                                                            queue:NULL
+                                                       usingBlock:^(CMTime time) { [weakSelf sendProgressUpdate]; }
+                       ];
+  }
 }
 
 - (AVPlayer *)_makePlayerWithItem:(AVPlayerItem *)item
