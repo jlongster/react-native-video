@@ -72,7 +72,7 @@
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSData *)data
 {
-    NSLog(@"Request failed");
+    NSLog(@"RCTVideoLoader: Request failed");
 }
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
@@ -106,7 +106,7 @@
 
     if (didRespondCompletely)
     {
-        NSLog(@"Completed %@", request.URL.absoluteString);
+        // NSLog(@"Completed %@", request.URL.absoluteString);
         [assetResponse.loadingRequest finishLoading];
         [self.pendingRequests removeObjectForKey:request];
     }
@@ -160,7 +160,7 @@
 
 - (BOOL)resourceLoader:(AVAssetResourceLoader *)resourceLoader shouldWaitForLoadingOfRequestedResource:(AVAssetResourceLoadingRequest *)loadingRequest
 {
-    NSLog(@"shouldWaitForLoadingOfRequestedResource %@ %d %d", loadingRequest.request.URL.absoluteString, loadingRequest.dataRequest.requestedOffset, loadingRequest.dataRequest.requestedLength);
+    // NSLog(@"shouldWaitForLoadingOfRequestedResource %@ %d %d", loadingRequest.request.URL.absoluteString, loadingRequest.dataRequest.requestedOffset, loadingRequest.dataRequest.requestedLength);
     // start downloading the fragment.
     NSURL *interceptedURL = loadingRequest.request.URL;
 
@@ -178,7 +178,7 @@
             loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
             [loadingRequest.dataRequest respondWithData:[data subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, MIN(loadingRequest.dataRequest.requestedLength, data.length))]];
             [loadingRequest finishLoading];
-            NSLog(@"Responded with memory cached data for %@", interceptedURL.absoluteString);
+            // NSLog(@"Responded with memory cached data for %@", interceptedURL.absoluteString);
             return YES;
         }
     }
@@ -193,7 +193,7 @@
         [loadingRequest finishLoading];
         [self addToMemoryCache:fileData url: interceptedURL.absoluteString];
 
-        NSLog(@"Responded with cached data for %@", interceptedURL.absoluteString);
+        // NSLog(@"Responded with cached data for %@", interceptedURL.absoluteString);
         return YES;
     }
 
@@ -214,13 +214,13 @@
 
 - (BOOL)resourceLoader:(AVAssetResourceLoader *)resourceLoader shouldWaitForRenewalOfRequestedResource:(AVAssetResourceRenewalRequest *)renewalRequest
 {
-    NSLog(@"shouldWaitForRenewalOfRequestedResource %@", renewalRequest.request.URL.absoluteString);
+    // NSLog(@"shouldWaitForRenewalOfRequestedResource %@", renewalRequest.request.URL.absoluteString);
     return YES;
 }
 
 - (void)resourceLoader:(AVAssetResourceLoader *)resourceLoader didCancelLoadingRequest:(AVAssetResourceLoadingRequest *)loadingRequest
 {
-    NSLog(@"Resource request cancelled for %@", loadingRequest.request.URL.absoluteString);
+    // NSLog(@"Resource request cancelled for %@", loadingRequest.request.URL.absoluteString);
     NSURLConnection *connectionForRequest = nil;
     NSEnumerator *enumerator = self.pendingRequests.keyEnumerator;
     BOOL found = NO;
