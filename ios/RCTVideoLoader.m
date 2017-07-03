@@ -81,12 +81,13 @@
     assetResponse.finished = YES;
     [self processPendingRequestsForResponse:assetResponse request:connection.originalRequest];
 
-    NSString *localName = [self localStringFromRemoteString:assetResponse.response.URL.absoluteString];
+    NSString *url = assetResponse.loadingRequest.request.URL.absoluteString;
+    NSString *localName = [self localStringFromRemoteString:url];
     NSString *cachedFilePath = [self.cachePath stringByAppendingPathComponent:localName];
+    // Write to disk cache
     [self.cachedFragments addObject:localName];
     [assetResponse.data writeToFile:cachedFilePath atomically:YES];
-
-    NSString *url = assetResponse.loadingRequest.request.URL.absoluteString;
+    // Add to memory cache
     [self addToMemoryCache:assetResponse.data url:url];
 }
 
