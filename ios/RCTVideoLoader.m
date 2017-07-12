@@ -84,11 +84,17 @@
     NSString *url = assetResponse.loadingRequest.request.URL.absoluteString;
     NSString *localName = [self localStringFromRemoteString:url];
     NSString *cachedFilePath = [self.cachePath stringByAppendingPathComponent:localName];
-    // Write to disk cache
-    [self.cachedFragments addObject:localName];
-    [assetResponse.data writeToFile:cachedFilePath atomically:YES];
-    // Add to memory cache
-    [self addToMemoryCache:assetResponse.data url:url];
+    // Check for nil values because we are seeing crashes here for
+    // some reason. I don't know how these values could be nil.
+    if(localName != nil) {
+        // Write to disk cache
+        [self.cachedFragments addObject:localName];
+        [assetResponse.data writeToFile:cachedFilePath atomically:YES];
+    }
+    if(url != nil) {
+        // Add to memory cache
+        [self addToMemoryCache:assetResponse.data url:url];
+    }
 }
 
 - (void)addToMemoryCache:(NSData *)data url:(NSString *)url
