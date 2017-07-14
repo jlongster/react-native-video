@@ -268,8 +268,10 @@ static NSString *const timedMetadata = @"timedMetadata";
 + (AVPlayerItem *)makePlayerItem:(NSString *)uri {
     NSURL *url = [NSURL URLWithString:uri];
     NSURLComponents *components = [[NSURLComponents alloc] initWithURL:url resolvingAgainstBaseURL:NO];
-    // For our delegate to be called, we need to specify a custom protocol
-    components.scheme = [@"custom-" stringByAppendingString:components.scheme];
+    if(![components.scheme isEqualToString:@"file"]) {
+        // For our delegate to be called, we need to specify a custom protocol
+        components.scheme = [@"custom-" stringByAppendingString:components.scheme];
+    }
 
     AVURLAsset *asset = [AVURLAsset URLAssetWithURL:components.URL options:nil];
     [asset.resourceLoader setDelegate:[RCTVideoLoader sharedInstance] queue:dispatch_get_main_queue()];

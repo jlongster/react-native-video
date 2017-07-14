@@ -24,6 +24,12 @@ export default class Video extends Component {
   }
 
   preload = (url) => {
+    // Convert to file:// protocol to match behavior in `render`, and
+    // so that code doesn't have to worry about the differences
+    if (url.match(/^\//)) {
+      url = `file://${url}`;
+    }
+
     this.setNativeProps({ preload: url });
   };
 
