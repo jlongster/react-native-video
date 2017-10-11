@@ -1,4 +1,5 @@
-import React, {Component, PropTypes} from 'react';
+import React, {Component} from 'react';
+import PropTypes from 'prop-types';
 import {StyleSheet, requireNativeComponent, NativeModules, View, Image} from 'react-native';
 import resolveAssetSource from 'react-native/Libraries/Image/resolveAssetSource';
 import VideoResizeMode from './VideoResizeMode.js';
@@ -33,8 +34,8 @@ export default class Video extends Component {
     this.setNativeProps({ preload: url });
   };
 
-  seek = (time) => {
-    this.setNativeProps({ seek: time });
+  restart = (time) => {
+    this.setNativeProps({ restart: true });
   };
 
   presentFullscreenPlayer = () => {
@@ -256,8 +257,8 @@ export default class Video extends Component {
 Video.propTypes = {
   /* Native only */
   src: PropTypes.object,
-  seek: PropTypes.number,
   fullscreen: PropTypes.bool,
+  restart: PropTypes.bool,
   preload: PropTypes.string,
   onVideoLoadStart: PropTypes.func,
   onVideoLoad: PropTypes.func,
@@ -323,7 +324,7 @@ Video.propTypes = {
 const RCTVideo = requireNativeComponent('RCTVideo', Video, {
   nativeOnly: {
     src: true,
-    seek: true,
+    restart: true,
     fullscreen: true,
   },
 });

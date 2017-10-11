@@ -597,6 +597,10 @@ static NSString *const timedMetadata = @"timedMetadata";
   _repeat = repeat;
 }
 
+- (void)setRestart:(BOOL)flag {
+    [_player seekToTime:CMTimeMakeWithSeconds(0, 10000)];
+}
+
 - (BOOL)getFullscreen
 {
     return _fullscreenPlayerPresented;

@@ -29,9 +29,9 @@ RCT_EXPORT_VIEW_PROPERTY(volume, float);
 RCT_EXPORT_VIEW_PROPERTY(playInBackground, BOOL);
 RCT_EXPORT_VIEW_PROPERTY(playWhenInactive, BOOL);
 RCT_EXPORT_VIEW_PROPERTY(rate, float);
-RCT_EXPORT_VIEW_PROPERTY(seek, float);
 RCT_EXPORT_VIEW_PROPERTY(currentTime, float);
 RCT_EXPORT_VIEW_PROPERTY(fullscreen, BOOL);
+RCT_EXPORT_VIEW_PROPERTY(restart, BOOL);
 RCT_EXPORT_VIEW_PROPERTY(progressUpdateInterval, float);
 RCT_EXPORT_VIEW_PROPERTY(preload, NSString);
 /* Should support: onLoadStart, onLoad, and onError to stay consistent with Image */
