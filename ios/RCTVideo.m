@@ -256,7 +256,15 @@ static NSString *const timedMetadata = @"timedMetadata";
 
 - (void)applyModifiers
 {
-  if (_paused) {
+    if (_muted) {
+        [_player setVolume:0];
+        [_player setMuted:YES];
+    } else {
+        [_player setVolume:_volume];
+        [_player setMuted:NO];
+    }
+
+ if (_paused) {
     [_player pause];
   } else {
     [_player play];
@@ -512,7 +520,7 @@ static NSString *const timedMetadata = @"timedMetadata";
     }
 
     [self attachListeners];
-    [_player play];
+    [self applyModifiers];
     [self _appear];
 }
 
@@ -599,6 +607,18 @@ static NSString *const timedMetadata = @"timedMetadata";
 
 - (void)setRestart:(BOOL)flag {
     [_player seekToTime:CMTimeMakeWithSeconds(0, 10000)];
+}
+
+- (void)setMuted:(BOOL)muted
+{
+    _muted = muted;
+    [self applyModifiers];
+}
+
+- (void)setVolume:(float)volume
+{
+  _volume = volume;
+  [self applyModifiers];
 }
 
 - (BOOL)getFullscreen
