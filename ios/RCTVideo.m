@@ -151,6 +151,7 @@ static NSString *const timedMetadata = @"timedMetadata";
 {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [self removePlayerItemObservers];
+  [self removePlayerLayer];
   [_player removeObserver:self forKeyPath:playbackRate context:nil];
 }
 
@@ -193,8 +194,7 @@ static NSString *const timedMetadata = @"timedMetadata";
                              @"playableDuration": [self calculatePlayableDuration],
                              @"atValue": [NSNumber numberWithLongLong:currentTime.value],
                              @"atTimescale": [NSNumber numberWithInt:currentTime.timescale],
-                             @"target": self.reactTag,
-                             @"seekableDuration": [NSNumber numberWithFloat:CMTimeGetSeconds([self playerItemSeekableTimeRange].duration)],
+                             @"target": self.reactTag
                             });
    }
 }
