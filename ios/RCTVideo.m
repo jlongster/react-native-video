@@ -256,6 +256,14 @@ static NSString *const timedMetadata = @"timedMetadata";
   }
 }
 
+- (void)applyAudioCategory {
+    if([_ignoreSilentSwitch isEqualToString:@"ignore"]) {
+        [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
+    } else if([_ignoreSilentSwitch isEqualToString:@"obey"]) {
+        [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryAmbient error:nil];
+    }
+}
+
 - (void)applyModifiers
 {
     if (_muted) {
@@ -269,6 +277,7 @@ static NSString *const timedMetadata = @"timedMetadata";
  if (_paused) {
     [_player pause];
   } else {
+    [self applyAudioCategory];
     [_player play];
   }    
 }
@@ -603,11 +612,7 @@ static NSString *const timedMetadata = @"timedMetadata";
   if (paused) {
     [_player pause];
   } else {
-    if([_ignoreSilentSwitch isEqualToString:@"ignore"]) {
-      [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
-    } else if([_ignoreSilentSwitch isEqualToString:@"obey"]) {
-      [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryAmbient error:nil];
-    }
+    [self applyAudioCategory];
     [_player play];
   }
 
