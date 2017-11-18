@@ -1,8 +1,11 @@
 #import <AVFoundation/AVFoundation.h>
 
+@class RCTEventDispatcher;
 @class RCTVideoLoader;
+
 @interface RCTVideoLoader : NSObject<AVAssetResourceLoaderDelegate, NSURLConnectionDataDelegate>
 + (instancetype)sharedInstance;
+- (void)setEventDispatcher:(RCTEventDispatcher *)eventDispatcher;
 @end
 
 @interface RCTAssetResponse : NSObject

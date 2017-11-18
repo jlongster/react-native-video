@@ -7,6 +7,7 @@
 //
 
 #import "RCTVideoLoader.h"
+#import <React/RCTEventDispatcher.h>
 
 @interface RCTVideoLoader ()
 
@@ -18,6 +19,9 @@
 @end
 
 @implementation RCTVideoLoader
+{
+  RCTEventDispatcher *_eventDispatcher;
+}
 
 + (instancetype)sharedInstance
 {
@@ -44,6 +48,10 @@
         _sharedInstance.memoryCache = [NSMutableArray new];
     });
     return _sharedInstance;
+}
+
+- (void)setEventDispatcher:(RCTEventDispatcher *)eventDispatcher {
+    self->_eventDispatcher = eventDispatcher;
 }
 
 - (NSString *)localStringFromRemoteString:(NSString *)string
@@ -156,6 +164,11 @@
     // Respond with whatever is available if we can't satisfy the request fully yet
     NSUInteger numberOfBytesToRespondWith = MIN((NSUInteger)dataRequest.requestedLength, unreadBytes);
 
+    
+    [_eventDispatcher sendAppEventWithName:@"bytesReceived" body:@{
+            @"numBytes": [NSNumber numberWithInt:numberOfBytesToRespondWith],
+            @"url": assetResponse.loadingRequest.request.URL.absoluteString
+    }];
     [dataRequest respondWithData:[assetResponse.data subdataWithRange:NSMakeRange((NSUInteger)startOffset, numberOfBytesToRespondWith)]];
 
     long long endOffset = startOffset + dataRequest.requestedLength;
@@ -170,12 +183,12 @@
     // NSLog(@"shouldWaitForLoadingOfRequestedResource %@ %d %d", loadingRequest.request.URL.absoluteString, loadingRequest.dataRequest.requestedOffset, loadingRequest.dataRequest.requestedLength);
     // start downloading the fragment.
     NSURL *interceptedURL = loadingRequest.request.URL;
+    NSString *localFile = [self localStringFromRemoteString:interceptedURL.absoluteString];
 
     NSURLComponents *actualURLComponents = [[NSURLComponents alloc] initWithURL:interceptedURL resolvingAgainstBaseURL:NO];
     actualURLComponents.scheme = [actualURLComponents.scheme stringByReplacingOccurrencesOfString:@"custom-" withString:@""];
     NSString *absoluteURL = actualURLComponents.URL.absoluteString;
 
-    NSString *localFile = [self localStringFromRemoteString:absoluteURL];
 
     for(NSDictionary *dict in self.memoryCache) {
         if([[dict objectForKey:@"url"] isEqualToString:interceptedURL.absoluteString]) {
@@ -183,20 +196,34 @@
             loadingRequest.contentInformationRequest.contentLength = data.length;
             loadingRequest.contentInformationRequest.contentType = @"video/mpegts";
             loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
-            [loadingRequest.dataRequest respondWithData:[data subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, MIN(loadingRequest.dataRequest.requestedLength, data.length))]];
+
+            NSUInteger numBytes = MIN(loadingRequest.dataRequest.requestedLength, data.length);
+            [_eventDispatcher sendAppEventWithName:@"bytesReceivedFromMemory" body:@{
+                  @"numBytes": [NSNumber numberWithInt:numBytes],
+                  @"url": absoluteURL
+            }];
+
+            [loadingRequest.dataRequest respondWithData:[data subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, numBytes)]];
             [loadingRequest finishLoading];
             // NSLog(@"Responded with memory cached data for %@", interceptedURL.absoluteString);
             return YES;
         }
     }
-    
-    if ([self.cachedFragments containsObject:localFile] && ![localFile hasSuffix:@".ts"])
+
+    if ([self.cachedFragments containsObject:localFile])
     {
         NSData *fileData = [[NSFileManager defaultManager] contentsAtPath:[self.cachePath stringByAppendingPathComponent:localFile]];
         loadingRequest.contentInformationRequest.contentLength = fileData.length;
         loadingRequest.contentInformationRequest.contentType = @"video/mpegts";
         loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
-        [loadingRequest.dataRequest respondWithData:[fileData subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, MIN(loadingRequest.dataRequest.requestedLength, fileData.length))]];
+
+        NSUInteger numBytes = MIN(loadingRequest.dataRequest.requestedLength, fileData.length);
+        [_eventDispatcher sendAppEventWithName:@"bytesReceivedFromDisk" body:@{
+                @"numBytes": [NSNumber numberWithInt:numBytes],
+                @"url": absoluteURL
+        }];
+
+        [loadingRequest.dataRequest respondWithData:[fileData subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, numBytes)]];
         [loadingRequest finishLoading];
         [self addToMemoryCache:fileData url: interceptedURL.absoluteString];
 

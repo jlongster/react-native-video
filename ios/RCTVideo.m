@@ -80,6 +80,8 @@ static NSString *const timedMetadata = @"timedMetadata";
     _playInBackground = false;
     _playWhenInactive = false;
     _ignoreSilentSwitch = @"inherit";
+
+    [[RCTVideoLoader sharedInstance] setEventDispatcher:eventDispatcher];
  
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(applicationWillResignActive:)
@@ -284,7 +286,7 @@ static NSString *const timedMetadata = @"timedMetadata";
 
 #pragma mark - Player and source
 
-+ (AVPlayerItem *)makePlayerItem:(NSString *)uri {
++ (AVPlayerItem *)makePlayerItem:(NSString *)uri dispatcher:(RCTEventDispatcher*)dispatcher {
     NSURL *url = [NSURL URLWithString:uri];
     NSURLComponents *components = [[NSURLComponents alloc] initWithURL:url resolvingAgainstBaseURL:NO];
     if(![components.scheme isEqualToString:@"file"]) {
@@ -296,7 +298,11 @@ static NSString *const timedMetadata = @"timedMetadata";
     [asset.resourceLoader setDelegate:[RCTVideoLoader sharedInstance] queue:dispatch_get_main_queue()];
 
     // Start loading the resource immediately
-    [asset loadValuesAsynchronouslyForKeys:@[@"playable"] completionHandler:^() {}];
+    [dispatcher sendAppEventWithName:@"preloadStatus" body:@{@"status": @"start", @"uri": uri}];
+    [asset loadValuesAsynchronouslyForKeys:@[@"playable"] completionHandler:^() {
+      [dispatcher sendAppEventWithName:@"preloadStatus" body:@{@"status": @"finish", @"uri": uri}];
+    }];
+
     
     return [AVPlayerItem playerItemWithAsset:asset];
 }
@@ -304,7 +310,7 @@ static NSString *const timedMetadata = @"timedMetadata";
 - (void)setPreload:(NSString *)url {
     if(![self.playerItemCache objectForKey:url]) {
         // NSLog(@"Preloading %@", url);
-        AVPlayerItem *item = [RCTVideo makePlayerItem:url];
+        AVPlayerItem *item = [RCTVideo makePlayerItem:url dispatcher:_eventDispatcher];
         [self.playerItemCache setObject:item forKey:url];
     }
 }
@@ -331,7 +337,7 @@ static NSString *const timedMetadata = @"timedMetadata";
         [self _setPlayerItem:item];
     }
     else {
-        item = [RCTVideo makePlayerItem:uri];
+        item = [RCTVideo makePlayerItem:uri dispatcher:_eventDispatcher];
         [self _setPlayerItem:item];
         [self.playerItemCache setObject:item forKey:uri];
     }
