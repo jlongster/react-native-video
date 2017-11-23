@@ -167,7 +167,8 @@
     
     [_eventDispatcher sendAppEventWithName:@"bytesReceived" body:@{
             @"numBytes": [NSNumber numberWithInt:numberOfBytesToRespondWith],
-            @"url": assetResponse.loadingRequest.request.URL.absoluteString
+            @"url": assetResponse.loadingRequest.request.URL.absoluteString,
+            @"requestLength": [NSNumber numberWithInt:dataRequest.requestedLength]
     }];
     [dataRequest respondWithData:[assetResponse.data subdataWithRange:NSMakeRange((NSUInteger)startOffset, numberOfBytesToRespondWith)]];
 
@@ -189,7 +190,6 @@
     actualURLComponents.scheme = [actualURLComponents.scheme stringByReplacingOccurrencesOfString:@"custom-" withString:@""];
     NSString *absoluteURL = actualURLComponents.URL.absoluteString;
 
-
     for(NSDictionary *dict in self.memoryCache) {
         if([[dict objectForKey:@"url"] isEqualToString:interceptedURL.absoluteString]) {
             NSData *data = [dict objectForKey:@"data"];
@@ -200,7 +200,8 @@
             NSUInteger numBytes = MIN(loadingRequest.dataRequest.requestedLength, data.length);
             [_eventDispatcher sendAppEventWithName:@"bytesReceivedFromMemory" body:@{
                   @"numBytes": [NSNumber numberWithInt:numBytes],
-                  @"url": absoluteURL
+                  @"url": absoluteURL,
+                  @"requestLength": [NSNumber numberWithInt:loadingRequest.dataRequest.requestedLength]
             }];
 
             [loadingRequest.dataRequest respondWithData:[data subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, numBytes)]];
@@ -220,7 +221,8 @@
         NSUInteger numBytes = MIN(loadingRequest.dataRequest.requestedLength, fileData.length);
         [_eventDispatcher sendAppEventWithName:@"bytesReceivedFromDisk" body:@{
                 @"numBytes": [NSNumber numberWithInt:numBytes],
-                @"url": absoluteURL
+                @"url": absoluteURL,
+                @"requestLength": [NSNumber numberWithInt:loadingRequest.dataRequest.requestedLength]
         }];
 
         [loadingRequest.dataRequest respondWithData:[fileData subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, numBytes)]];
