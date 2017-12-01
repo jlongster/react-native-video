@@ -303,22 +303,19 @@ static NSString *const timedMetadata = @"timedMetadata";
       [dispatcher sendAppEventWithName:@"preloadStatus" body:@{@"status": @"finish", @"uri": uri}];
     }];
 
-    
     return [AVPlayerItem playerItemWithAsset:asset];
 }
 
 - (void)setPreload:(NSString *)url {
     if(![self.playerItemCache objectForKey:url]) {
-        // NSLog(@"Preloading %@", url);
         AVPlayerItem *item = [RCTVideo makePlayerItem:url dispatcher:_eventDispatcher];
         [self.playerItemCache setObject:item forKey:url];
     }
 }
 
-- (void)setSrc:(NSDictionary *)source
-{
+- (void)setSrc:(NSDictionary *)source {    
     NSString *uri = [source objectForKey:@"uri"];
-
+    
     // Don't render any video
     if([uri length] == 0) {
         AVPlayerItem *prevItem = _player.currentItem;
@@ -332,6 +329,7 @@ static NSString *const timedMetadata = @"timedMetadata";
     _loaded = NO;
     AVPlayerItem *cachedItem = [self.playerItemCache objectForKey:uri];
     AVPlayerItem *item;
+
     if(cachedItem) {
         item = cachedItem;
         [self _setPlayerItem:item];
@@ -369,9 +367,8 @@ static NSString *const timedMetadata = @"timedMetadata";
         // the `source` setter here. Wait for one tick to dispatch
         // the load event.
         dispatch_async(dispatch_get_main_queue(), ^{
-                // NSLog(@"Loaded (from cache)");
-                [self emitLoadEvent];
-            });
+            [self emitLoadEvent];
+        });
     }
     else {
         [self _disappear];
@@ -459,8 +456,8 @@ static NSString *const timedMetadata = @"timedMetadata";
       _playerBufferEmpty = YES;
       self.onVideoBuffer(@{@"isBuffering": @(YES), @"target": self.reactTag});
     } else if ([keyPath isEqualToString:playbackBufferFullKeyPath]) {
-        _playerBufferEmpty = NO;
-        self.onVideoBuffer(@{@"isBuffering": @(NO), @"target": self.reactTag});
+      self.onVideoBuffer(@{@"isBuffering": @(NO), @"target": self.reactTag});
+      _playerBufferEmpty = NO;
     } else if([keyPath isEqualToString:@"loadedTimeRanges"]) {
         // for(id obj in _playerItem.loadedTimeRanges) {
         //     CMTimeRange range = [obj CMTimeRangeValue];
