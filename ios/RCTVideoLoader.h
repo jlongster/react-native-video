@@ -6,11 +6,16 @@
 @interface RCTVideoLoader : NSObject<AVAssetResourceLoaderDelegate, NSURLConnectionDataDelegate>
 + (instancetype)sharedInstance;
 - (void)setEventDispatcher:(RCTEventDispatcher *)eventDispatcher;
+- (void)prefetch:(NSURL *)url;
 @end
 
-@interface RCTAssetResponse : NSObject
-@property (readwrite) NSMutableData *data;
-@property (readwrite) AVAssetResourceLoadingRequest *loadingRequest;
-@property (readwrite) NSURLResponse* response;
-@property (readwrite) BOOL finished;
+/* @interface RCTCachedResponse : NSObject */
+/* @property (readwrite) NSData* data; */
+/* @property (readwrite) NSURLResponse* response; */
+/* @end */
+
+@interface RCTCachedAsset : NSObject
+@property (readwrite) NSMutableData* data;
+@property (readwrite) NSString* contentType;
+@property (readwrite) long long contentLength;
 @end

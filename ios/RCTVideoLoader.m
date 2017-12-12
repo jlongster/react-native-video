@@ -11,10 +11,10 @@
 
 @interface RCTVideoLoader ()
 
-@property (nonatomic, strong) NSMapTable *pendingRequests; // Dictionary of NSURLConnections to RCTAssetResponses
-@property (nonatomic, strong) NSMutableSet *cachedFragments; // Set of NSStrings (file paths)
-@property (nonatomic, strong) NSMutableArray *memoryCache;
+@property (nonatomic, strong) NSMutableDictionary *blockedLoadingRequests;
+@property (nonatomic, strong) NSMutableDictionary *memoryCache;
 @property (nonatomic, copy) NSString *cachePath;
+@property (nonatomic, strong) NSMutableSet *cachedFragments; // Set of NSStrings (file paths)
 
 @end
 
@@ -44,8 +44,8 @@
             return basePath;
         }();
         _sharedInstance.cachedFragments = [NSMutableSet setWithArray:[[NSFileManager defaultManager] contentsOfDirectoryAtPath:_sharedInstance.cachePath error:nil]];
-        _sharedInstance.pendingRequests = [NSMapTable new];
-        _sharedInstance.memoryCache = [NSMutableArray new];
+        _sharedInstance.memoryCache = [NSMutableDictionary new];
+        _sharedInstance.blockedLoadingRequests = [NSMutableDictionary new];
     });
     return _sharedInstance;
 }
@@ -54,229 +54,219 @@
     self->_eventDispatcher = eventDispatcher;
 }
 
-- (NSString *)localStringFromRemoteString:(NSString *)string
-{
-    NSCharacterSet* invalid = [NSCharacterSet characterSetWithCharactersInString:@"/\\?%*|\"<>"];
-    return [[string componentsSeparatedByCharactersInSet:invalid] componentsJoinedByString:@"------"];
-}
+// NSURLConnection delegate
 
-#pragma mark - NSURLConnection delegate
+- (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response {
+    NSString *url = [[connection currentRequest] URL].absoluteString;
+    RCTCachedAsset *cachedAsset = self.memoryCache[url];
+    cachedAsset.contentType = [response MIMEType];
+    cachedAsset.contentLength = [response expectedContentLength];
 
-- (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
-{
-    RCTAssetResponse *assetResponse = [self.pendingRequests objectForKey:connection.originalRequest];
-    assetResponse.response = response;
-    assetResponse.loadingRequest.response = response;
-    [self fillInContentInformation:assetResponse.loadingRequest.contentInformationRequest response:assetResponse.response];
-    [self processPendingRequestsForResponse:assetResponse request:connection.originalRequest];
-}
-
-- (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
-{
-    RCTAssetResponse *assetResponse = [self.pendingRequests objectForKey:connection.originalRequest];
-    [assetResponse.data appendData:data];
-    [self processPendingRequestsForResponse:assetResponse request:connection.originalRequest];
-}
-
-- (void)connection:(NSURLConnection *)connection didFailWithError:(NSData *)data
-{
-    NSLog(@"RCTVideoLoader: Request failed");
-}
-
-- (void)connectionDidFinishLoading:(NSURLConnection *)connection
-{
-    RCTAssetResponse *assetResponse = [self.pendingRequests objectForKey:connection.originalRequest];
-    assetResponse.finished = YES;
-    [self processPendingRequestsForResponse:assetResponse request:connection.originalRequest];
-
-    NSString *url = assetResponse.loadingRequest.request.URL.absoluteString;
-    NSString *localName = [self localStringFromRemoteString:url];
-    NSString *cachedFilePath = [self.cachePath stringByAppendingPathComponent:localName];
-    // Check for nil values because we are seeing crashes here for
-    // some reason. I don't know how these values could be nil.
-    if(localName != nil) {
-        // Write to disk cache
-        [self.cachedFragments addObject:localName];
-        [assetResponse.data writeToFile:cachedFilePath atomically:YES];
-    }
-    if(url != nil) {
-        // Add to memory cache
-        [self addToMemoryCache:assetResponse.data url:url];
-    }
-}
-
-- (void)addToMemoryCache:(NSData *)data url:(NSString *)url
-{
-    if([self.memoryCache count] > 4) {
-        [self.memoryCache removeObjectAtIndex: 0];
-    }
-    [self.memoryCache addObject:@{@"data": data, @"url": url}];
-}
-
-#pragma mark - AVURLAsset resource loading
-
-- (void)processPendingRequestsForResponse:(RCTAssetResponse *)assetResponse request:(NSURLRequest *)request
-{
-    BOOL didRespondCompletely = [self respondWithDataForRequest:assetResponse];
-
-    if (didRespondCompletely)
-    {
-        // NSLog(@"Completed %@", request.URL.absoluteString);
-        [assetResponse.loadingRequest finishLoading];
-        [self.pendingRequests removeObjectForKey:request];
-    }
-}
-
-- (void)fillInContentInformation:(AVAssetResourceLoadingContentInformationRequest *)contentInformationRequest response:(NSURLResponse *)response
-{
-    if (contentInformationRequest == nil || response == nil)
-    {
-        return;
-    }
-
-    contentInformationRequest.byteRangeAccessSupported = NO;
-    contentInformationRequest.contentType = [response MIMEType];
-    contentInformationRequest.contentLength = [response expectedContentLength];
-}
-
-- (BOOL)respondWithDataForRequest:(RCTAssetResponse *)assetResponse
-{
-    AVAssetResourceLoadingDataRequest *dataRequest = assetResponse.loadingRequest.dataRequest;
-    long long startOffset = dataRequest.requestedOffset;
-    if (dataRequest.currentOffset != 0)
-    {
-        startOffset = dataRequest.currentOffset;
-    }
-
-    // Don't have any data at all for this request
-    if (assetResponse.data.length < startOffset)
-    {
-        return NO;
-    }
-    if (!assetResponse.finished)
-    {
-        return NO;
-    }
-
-    // This is the total data we have from startOffset to whatever has been downloaded so far
-    NSUInteger unreadBytes = assetResponse.data.length - (NSUInteger)startOffset;
-
-    // Respond with whatever is available if we can't satisfy the request fully yet
-    NSUInteger numberOfBytesToRespondWith = MIN((NSUInteger)dataRequest.requestedLength, unreadBytes);
-
-    
-    [_eventDispatcher sendAppEventWithName:@"bytesReceived" body:@{
-            @"numBytes": [NSNumber numberWithInt:numberOfBytesToRespondWith],
-            @"url": assetResponse.loadingRequest.request.URL.absoluteString,
-            @"requestLength": [NSNumber numberWithInt:dataRequest.requestedLength]
+    NSMutableArray *blockedRequests = self.blockedLoadingRequests[url];
+    NSMutableArray *finishedRequests = [NSMutableArray new]; 
+    [blockedRequests enumerateObjectsUsingBlock:^(AVAssetResourceLoadingRequest* loadingRequest, NSUInteger idx, BOOL *stop) {
+        if(loadingRequest.contentInformationRequest != nil) {
+           loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
+           loadingRequest.contentInformationRequest.contentType = cachedAsset.contentType;
+           loadingRequest.contentInformationRequest.contentLength = cachedAsset.contentLength;
+           [loadingRequest finishLoading];
+           [finishedRequests addObject:loadingRequest];
+        }
     }];
-    [dataRequest respondWithData:[assetResponse.data subdataWithRange:NSMakeRange((NSUInteger)startOffset, numberOfBytesToRespondWith)]];
-
-    long long endOffset = startOffset + dataRequest.requestedLength;
-    BOOL didRespondFully = assetResponse.data.length >= endOffset;
-
-    return didRespondFully || assetResponse.finished;
+    [blockedRequests removeObjectsInArray:finishedRequests];
 }
 
+- (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data {
+    NSString *url = [[connection currentRequest] URL].absoluteString;
+    RCTCachedAsset *cachedAsset = self.memoryCache[url];
 
-- (BOOL)resourceLoader:(AVAssetResourceLoader *)resourceLoader shouldWaitForLoadingOfRequestedResource:(AVAssetResourceLoadingRequest *)loadingRequest
-{
-    // NSLog(@"shouldWaitForLoadingOfRequestedResource %@ %d %d", loadingRequest.request.URL.absoluteString, loadingRequest.dataRequest.requestedOffset, loadingRequest.dataRequest.requestedLength);
-    // start downloading the fragment.
-    NSURL *interceptedURL = loadingRequest.request.URL;
-    NSString *localFile = [self localStringFromRemoteString:interceptedURL.absoluteString];
+    [cachedAsset.data appendData:data];
+    
+    NSMutableArray *blockedRequests = self.blockedLoadingRequests[url];
+    NSMutableArray *finishedRequests = [NSMutableArray new];
+    [blockedRequests enumerateObjectsUsingBlock:^(AVAssetResourceLoadingRequest* loadingRequest, NSUInteger idx, BOOL *stop) {
+        if(loadingRequest.contentInformationRequest == nil) {
+            if([self sendAvailableBytes:loadingRequest cachedAsset:cachedAsset]) {
+                [finishedRequests addObject:loadingRequest];
+            }
+        }
+    }];
 
-    NSURLComponents *actualURLComponents = [[NSURLComponents alloc] initWithURL:interceptedURL resolvingAgainstBaseURL:NO];
-    actualURLComponents.scheme = [actualURLComponents.scheme stringByReplacingOccurrencesOfString:@"custom-" withString:@""];
-    NSString *absoluteURL = actualURLComponents.URL.absoluteString;
+    [blockedRequests removeObjectsInArray:finishedRequests];
+}
 
-    for(NSDictionary *dict in self.memoryCache) {
-        if([[dict objectForKey:@"url"] isEqualToString:interceptedURL.absoluteString]) {
-            NSData *data = [dict objectForKey:@"data"];
-            loadingRequest.contentInformationRequest.contentLength = data.length;
-            loadingRequest.contentInformationRequest.contentType = @"video/mpegts";
-            loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
+- (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error {
+    NSString *url = [[connection currentRequest] URL].absoluteString;
+    self.memoryCache[url] = nil;
 
-            NSUInteger numBytes = MIN(loadingRequest.dataRequest.requestedLength, data.length);
-            [_eventDispatcher sendAppEventWithName:@"bytesReceivedFromMemory" body:@{
-                  @"numBytes": [NSNumber numberWithInt:numBytes],
-                  @"url": absoluteURL,
-                  @"requestLength": [NSNumber numberWithInt:loadingRequest.dataRequest.requestedLength]
-            }];
+    NSMutableArray *blockedRequests = self.blockedLoadingRequests[url];
+    [blockedRequests enumerateObjectsUsingBlock:^(AVAssetResourceLoadingRequest* loadingRequest, NSUInteger idx, BOOL *stop) {
+        [loadingRequest finishLoadingWithError:error];
+    }];
+    [blockedRequests removeAllObjects];
 
-            [loadingRequest.dataRequest respondWithData:[data subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, numBytes)]];
+}
+
+- (void)connectionDidFinishLoading:(NSURLConnection *)connection {
+    NSString *url = [[connection currentRequest] URL].absoluteString;
+    // Nothing to do yet
+}
+
+- (BOOL)sendAvailableBytes:(AVAssetResourceLoadingRequest *)loadingRequest cachedAsset:(RCTCachedAsset *)cachedAsset {
+    AVAssetResourceLoadingDataRequest *dataRequest = loadingRequest.dataRequest;
+    if(dataRequest.currentOffset < cachedAsset.data.length - 1) {
+        long long totalLength = dataRequest.requestedOffset + dataRequest.requestedLength;
+        long long neededBytes = totalLength - dataRequest.currentOffset;
+        long long availableBytes = cachedAsset.data.length - dataRequest.currentOffset;
+
+        [dataRequest respondWithData:
+          [cachedAsset.data subdataWithRange: NSMakeRange(dataRequest.currentOffset, MIN(neededBytes, availableBytes))]
+        ];
+
+        if(neededBytes <= availableBytes) {
             [loadingRequest finishLoading];
-            // NSLog(@"Responded with memory cached data for %@", interceptedURL.absoluteString);
             return YES;
         }
     }
 
-    if ([self.cachedFragments containsObject:localFile])
-    {
-        NSData *fileData = [[NSFileManager defaultManager] contentsAtPath:[self.cachePath stringByAppendingPathComponent:localFile]];
-        loadingRequest.contentInformationRequest.contentLength = fileData.length;
-        loadingRequest.contentInformationRequest.contentType = @"video/mpegts";
-        loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
+    return NO;
+}
 
-        NSUInteger numBytes = MIN(loadingRequest.dataRequest.requestedLength, fileData.length);
-        [_eventDispatcher sendAppEventWithName:@"bytesReceivedFromDisk" body:@{
-                @"numBytes": [NSNumber numberWithInt:numBytes],
-                @"url": absoluteURL,
-                @"requestLength": [NSNumber numberWithInt:loadingRequest.dataRequest.requestedLength]
-        }];
+// Fetching
 
-        [loadingRequest.dataRequest respondWithData:[fileData subdataWithRange:NSMakeRange(loadingRequest.dataRequest.requestedOffset, numBytes)]];
-        [loadingRequest finishLoading];
-        [self addToMemoryCache:fileData url: interceptedURL.absoluteString];
+- (void)fetch:(NSString *)url {
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]
+                                                           cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
+                                                       timeoutInterval:60];
+    // NSString *bytesString = [NSString stringWithFormat:@"bytes=%lli-%lli",lowerBound,upperBound];
+    // [request addValue:bytesString forHTTPHeaderField:@"Range"];
 
-        // NSLog(@"Responded with cached data for %@", interceptedURL.absoluteString);
-        return YES;
-    }
-
-    // This is a memory leak
-    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:absoluteURL]];
     NSURLConnection *connection = [[NSURLConnection alloc] initWithRequest:request delegate:self startImmediately:NO];
     [connection setDelegateQueue:[NSOperationQueue mainQueue]];
     [connection start];
+   
+    RCTCachedAsset *cachedAsset = [RCTCachedAsset new];
+    cachedAsset.data = [NSMutableData new];
+    cachedAsset.contentType = nil;
+    cachedAsset.contentLength = 0;
+    self.memoryCache[url] = cachedAsset;
+}
 
-    RCTAssetResponse *assetResponse = [RCTAssetResponse new];
-    assetResponse.data = [NSMutableData new];
-    assetResponse.loadingRequest = loadingRequest;
+// AVURLAsset resource loading
 
-    [self.pendingRequests setObject:assetResponse forKey:request];
+- (NSString *)getRequestURL:(AVAssetResourceLoadingRequest *)loadingRequest {
+    return [self removeCustomPrefix:loadingRequest.request.URL].absoluteString;
+}
+
+- (NSURL*)removeCustomPrefix:(NSURL*)url {
+  NSURLComponents *comps = [[NSURLComponents alloc] initWithURL:url resolvingAgainstBaseURL:NO];
+  comps.scheme = [comps.scheme stringByReplacingOccurrencesOfString:@"custom-" withString:@""];
+  return comps.URL;
+}
+
+- (void)addBlockedLoadingRequest:(AVAssetResourceLoadingRequest *)loadingRequest {
+    NSString *url = [self getRequestURL:loadingRequest];
+    if(self.blockedLoadingRequests[url] == nil) {
+        self.blockedLoadingRequests[url] = [NSMutableArray new];
+    }
+
+    NSMutableArray *arr = self.blockedLoadingRequests[url];
+    
+    [arr addObject:loadingRequest];
+}
+
+- (BOOL)handleRequestFromMemory:(AVAssetResourceLoadingRequest *)loadingRequest {
+    RCTCachedAsset *cachedAsset = self.memoryCache[[self getRequestURL:loadingRequest]];
+    if(cachedAsset == nil) {
+        return NO;
+    }
+
+    AVAssetResourceLoadingDataRequest *dataRequest = loadingRequest.dataRequest;
+    long long offset = dataRequest.requestedOffset;
+    long long length = dataRequest.requestedLength;
+
+    // Respond immediately to either a content information request or
+    // data request, or block until the existing network fetches have
+    // the data we need.
+    if(loadingRequest.contentInformationRequest != nil && cachedAsset.contentType != nil) {
+        loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
+        loadingRequest.contentInformationRequest.contentType = cachedAsset.contentType;
+        loadingRequest.contentInformationRequest.contentLength = cachedAsset.contentLength;
+        [loadingRequest finishLoading];
+    }
+    else if(![self sendAvailableBytes:loadingRequest cachedAsset:cachedAsset]) {
+        [_eventDispatcher sendAppEventWithName:@"video-log" body:@{
+               @"msg": [NSString stringWithFormat:@"Adding blocked request %lli %lli",
+                                 loadingRequest.dataRequest.requestedOffset,
+                                 loadingRequest.dataRequest.requestedLength],
+          @"url": [self getRequestURL:loadingRequest]
+        }];
+        [self addBlockedLoadingRequest:loadingRequest];
+    }
+    else {
+        [_eventDispatcher sendAppEventWithName:@"video-log" body:@{
+               @"msg": [NSString stringWithFormat:@"Sent straight from memory %lli %lli",
+                                 loadingRequest.dataRequest.requestedOffset,
+                                 loadingRequest.dataRequest.requestedLength],
+          @"url": [self getRequestURL:loadingRequest]
+        }];
+
+    }
+    
+    return YES;
+}
+
+- (BOOL)handleRequest:(AVAssetResourceLoadingRequest *)loadingRequest {
+    if(loadingRequest.request.URL == nil) {
+        return NO;
+    }
+
+    // Check the in-memory cache first
+    if([self handleRequestFromMemory:loadingRequest]) {
+        return YES;
+    }
+
+    [self fetch:[self getRequestURL:loadingRequest]];
+    [self addBlockedLoadingRequest:loadingRequest];
 
     return YES;
+}
+
+- (BOOL)resourceLoader:(AVAssetResourceLoader *)resourceLoader shouldWaitForLoadingOfRequestedResource:(AVAssetResourceLoadingRequest *)loadingRequest
+{
+    NSURL *interceptedURL = loadingRequest.request.URL;
+
+    // Use the following code to log messages in the frontend to debug
+    // issues. Copy this around to wherever you need to log and change
+    // the params.
+    //
+    // [_eventDispatcher sendAppEventWithName:@"video-log" body:@{
+    //            @"msg": [NSString stringWithFormat:@"AVAsset request, offset: %lli length: %lli",
+    //                              loadingRequest.dataRequest.requestedOffset,
+    //                              loadingRequest.dataRequest.requestedLength],
+    //       @"url": [self getRequestURL:loadingRequest]
+    //     }];
+
+    if(loadingRequest.contentInformationRequest != nil || loadingRequest.dataRequest != nil) {
+        return [self handleRequest:loadingRequest];
+    }
+    return NO;
 }
 
 - (BOOL)resourceLoader:(AVAssetResourceLoader *)resourceLoader shouldWaitForRenewalOfRequestedResource:(AVAssetResourceRenewalRequest *)renewalRequest
 {
-    // NSLog(@"shouldWaitForRenewalOfRequestedResource %@", renewalRequest.request.URL.absoluteString);
-    return YES;
+    [NSException raise:@"NotImplemented" format:@"Videos asset handler does not support authenticated resources"];
+    return NO;
 }
 
 - (void)resourceLoader:(AVAssetResourceLoader *)resourceLoader didCancelLoadingRequest:(AVAssetResourceLoadingRequest *)loadingRequest
 {
-    // NSLog(@"Resource request cancelled for %@", loadingRequest.request.URL.absoluteString);
-    NSURLConnection *connectionForRequest = nil;
-    NSEnumerator *enumerator = self.pendingRequests.keyEnumerator;
-    BOOL found = NO;
-    while ((connectionForRequest = [enumerator nextObject]) && !found)
-    {
-        RCTAssetResponse *assetResponse = [self.pendingRequests objectForKey:connectionForRequest];
-        if (assetResponse.loadingRequest == loadingRequest)
-        {
-            [connectionForRequest cancel];
-            found = YES;
-        }
-    }
-    if (found)
-    {
-        [self.pendingRequests removeObjectForKey:connectionForRequest];
-    }
+    NSString *url = [self getRequestURL:loadingRequest];
+    NSMutableArray *blockedRequests = self.blockedLoadingRequests[url];
+    [blockedRequests removeObject:loadingRequest];
 }
 
 @end
 
-@implementation RCTAssetResponse
-
+@implementation RCTCachedAsset
 @end
