@@ -66,7 +66,7 @@
     NSMutableArray *finishedRequests = [NSMutableArray new]; 
     [blockedRequests enumerateObjectsUsingBlock:^(AVAssetResourceLoadingRequest* loadingRequest, NSUInteger idx, BOOL *stop) {
         if(loadingRequest.contentInformationRequest != nil) {
-           loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
+           loadingRequest.contentInformationRequest.byteRangeAccessSupported = YES;
            loadingRequest.contentInformationRequest.contentType = cachedAsset.contentType;
            loadingRequest.contentInformationRequest.contentLength = cachedAsset.contentLength;
            [loadingRequest finishLoading];
@@ -189,28 +189,13 @@
     // data request, or block until the existing network fetches have
     // the data we need.
     if(loadingRequest.contentInformationRequest != nil && cachedAsset.contentType != nil) {
-        loadingRequest.contentInformationRequest.byteRangeAccessSupported = NO;
+        loadingRequest.contentInformationRequest.byteRangeAccessSupported = YES;
         loadingRequest.contentInformationRequest.contentType = cachedAsset.contentType;
         loadingRequest.contentInformationRequest.contentLength = cachedAsset.contentLength;
         [loadingRequest finishLoading];
     }
     else if(![self sendAvailableBytes:loadingRequest cachedAsset:cachedAsset]) {
-        [_eventDispatcher sendAppEventWithName:@"video-log" body:@{
-               @"msg": [NSString stringWithFormat:@"Adding blocked request %lli %lli",
-                                 loadingRequest.dataRequest.requestedOffset,
-                                 loadingRequest.dataRequest.requestedLength],
-          @"url": [self getRequestURL:loadingRequest]
-        }];
         [self addBlockedLoadingRequest:loadingRequest];
-    }
-    else {
-        [_eventDispatcher sendAppEventWithName:@"video-log" body:@{
-               @"msg": [NSString stringWithFormat:@"Sent straight from memory %lli %lli",
-                                 loadingRequest.dataRequest.requestedOffset,
-                                 loadingRequest.dataRequest.requestedLength],
-          @"url": [self getRequestURL:loadingRequest]
-        }];
-
     }
     
     return YES;
