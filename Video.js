@@ -2,7 +2,6 @@ import React, {Component} from 'react';
 import PropTypes from 'prop-types';
 import {StyleSheet, requireNativeComponent, NativeModules, View, Image} from 'react-native';
 import resolveAssetSource from 'react-native/Libraries/Image/resolveAssetSource';
-import VideoResizeMode from './VideoResizeMode.js';
 
 const styles = StyleSheet.create({
   base: {
@@ -167,7 +166,6 @@ export default class Video extends Component {
   };
 
   render() {
-    const resizeMode = this.props.resizeMode;
     const source = resolveAssetSource(this.props.source) || {};
 
     let uri = source.uri || '';
@@ -178,21 +176,9 @@ export default class Video extends Component {
     const isNetwork = !!(uri && uri.match(/^https?:/));
     const isAsset = !!(uri && uri.match(/^(assets-library|file|content|ms-appx|ms-appdata):/));
 
-    let nativeResizeMode;
-    if (resizeMode === VideoResizeMode.stretch) {
-      nativeResizeMode = NativeModules.UIManager.RCTVideo.Constants.ScaleToFill;
-    } else if (resizeMode === VideoResizeMode.contain) {
-      nativeResizeMode = NativeModules.UIManager.RCTVideo.Constants.ScaleAspectFit;
-    } else if (resizeMode === VideoResizeMode.cover) {
-      nativeResizeMode = NativeModules.UIManager.RCTVideo.Constants.ScaleAspectFill;
-    } else {
-      nativeResizeMode = NativeModules.UIManager.RCTVideo.Constants.ScaleNone;
-    }
-
     const nativeProps = Object.assign({}, this.props);
     Object.assign(nativeProps, {
       style: [styles.base, nativeProps.style],
-      resizeMode: nativeResizeMode,
       src: {
         uri,
         isNetwork,
@@ -227,8 +213,7 @@ export default class Video extends Component {
         left: 0,
         top: 0,
         right: 0,
-        bottom: 0,
-        resizeMode: 'contain',
+        bottom: 0
       };
 
       return (
@@ -281,7 +266,6 @@ Video.propTypes = {
     // Opaque type returned by require('./video.mp4')
     PropTypes.number
   ]),
-  resizeMode: PropTypes.string,
   poster: PropTypes.string,
   repeat: PropTypes.bool,
   paused: PropTypes.bool,

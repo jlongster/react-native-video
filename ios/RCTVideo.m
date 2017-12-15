@@ -47,7 +47,6 @@ static NSString *const timedMetadata = @"timedMetadata";
   BOOL _playInBackground;
   BOOL _playWhenInactive;
   NSString * _ignoreSilentSwitch;
-  NSString * _resizeMode;
   BOOL _fullscreenPlayerPresented;
   UIViewController * _presentingViewController;
 
@@ -70,7 +69,6 @@ static NSString *const timedMetadata = @"timedMetadata";
     _playbackStalled = NO;
     _rate = 1.0;
     _volume = 1.0;
-    _resizeMode = @"AVLayerVideoGravityResizeAspectFill";
     _pendingSeek = false;
     _pendingSeekTime = 0.0f;
     _lastSeekTime = 0.0f;
@@ -581,19 +579,6 @@ static NSString *const timedMetadata = @"timedMetadata";
 
 #pragma mark - Prop setters
 
-- (void)setResizeMode:(NSString*)mode
-{
-  if( _controls )
-  {
-    _playerViewController.videoGravity = mode;
-  }
-  else
-  {
-    _playerLayer.videoGravity = mode;
-  }
-  _resizeMode = mode;
-}
-
 - (void)setPlayInBackground:(BOOL)playInBackground
 {
   _playInBackground = playInBackground;
@@ -701,7 +686,6 @@ static NSString *const timedMetadata = @"timedMetadata";
         _playerViewController = [self createPlayerViewController:_player withPlayerItem:_playerItem];
         // to prevent video from being animated when resizeMode is 'cover'
         // resize mode must be set before subview is added
-        [self setResizeMode:_resizeMode];
         [self addSubview:_playerViewController.view];
     }
 }
@@ -714,6 +698,7 @@ static NSString *const timedMetadata = @"timedMetadata";
       _playerLayer = [AVPlayerLayer playerLayerWithPlayer:_player];
       _playerLayer.frame = self.bounds;
       _playerLayer.needsDisplayOnBoundsChange = YES;
+      _playerLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
 
       [_playerLayer addObserver:self forKeyPath:readyForDisplayKeyPath options:NSKeyValueObservingOptionNew context:nil];
 
