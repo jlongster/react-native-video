@@ -318,6 +318,7 @@ static NSString *const timedMetadata = @"timedMetadata";
     if([uri length] == 0) {
         AVPlayerItem *prevItem = _player.currentItem;
         [_player replaceCurrentItemWithPlayerItem:nil];
+        [self _setPlayerItem:nil];
         [prevItem seekToTime:kCMTimeZero];
         [self removePlayerTimeObserver];
         [self _disappear];
@@ -377,7 +378,10 @@ static NSString *const timedMetadata = @"timedMetadata";
 {
     [self removePlayerItemObservers];
     _playerItem = item;
-    [self addPlayerItemObservers];
+
+    if(item != nil) {
+        [self addPlayerItemObservers];
+    }
 }
 
 - (void)addPlayerTimeObservers
