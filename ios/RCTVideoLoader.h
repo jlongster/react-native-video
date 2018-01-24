@@ -7,6 +7,7 @@
 + (instancetype)sharedInstance;
 - (void)setEventDispatcher:(RCTEventDispatcher *)eventDispatcher;
 - (void)prefetch:(NSURL *)url;
+- (NSURL*)removeCustomPrefix:(NSURL*)url;
 @end
 
 /* @interface RCTCachedResponse : NSObject */

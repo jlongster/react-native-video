@@ -192,6 +192,7 @@ static NSString *const timedMetadata = @"timedMetadata";
    const Float64 currentTimeSecs = CMTimeGetSeconds(currentTime);
    if( currentTimeSecs >= 0 && self.onVideoProgress) {
       self.onVideoProgress(@{
+                             @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)_playerItem.asset).URL].absoluteString,
                              @"currentTime": [NSNumber numberWithFloat:CMTimeGetSeconds(currentTime)],
                              @"playableDuration": [self calculatePlayableDuration],
                              @"atValue": [NSNumber numberWithLongLong:currentTime.value],
@@ -452,6 +453,7 @@ static NSString *const timedMetadata = @"timedMetadata";
         if(_playerItem.status == AVPlayerItemStatusFailed && self.onVideoError) {
             self.onVideoError(@{@"error": @{@"code": [NSNumber numberWithInteger: _playerItem.error.code],
                             @"domain": _playerItem.error.domain},
+                        @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)_playerItem.asset).URL].absoluteString,
                         @"target": self.reactTag});
         }
     } else if ([keyPath isEqualToString:playbackBufferEmptyKeyPath]) {
@@ -492,6 +494,7 @@ static NSString *const timedMetadata = @"timedMetadata";
           if(_playbackStalled && _player.rate > 0) {
               if(self.onPlaybackResume) {
                   self.onPlaybackResume(@{@"playbackRate": [NSNumber numberWithFloat:_player.rate],
+                                          @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)_playerItem.asset).URL].absoluteString,
                                           @"target": self.reactTag});
               }
               _playbackStalled = NO;
@@ -527,6 +530,7 @@ static NSString *const timedMetadata = @"timedMetadata";
                     @"canPlaySlowReverse": [NSNumber numberWithBool:_playerItem.canPlaySlowReverse],
                     @"canStepBackward": [NSNumber numberWithBool:_playerItem.canStepBackward],
                     @"canStepForward": [NSNumber numberWithBool:_playerItem.canStepForward],
+                    @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)_playerItem.asset).URL].absoluteString,
                     @"naturalSize": @{
                     @"width": width,
                         @"height": height,
@@ -564,7 +568,9 @@ static NSString *const timedMetadata = @"timedMetadata";
 - (void)playbackStalled:(NSNotification *)notification
 {
   if(self.onPlaybackStalled) {
-    self.onPlaybackStalled(@{@"target": self.reactTag});
+    self.onPlaybackStalled(@{
+            @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)_playerItem.asset).URL].absoluteString,
+            @"target": self.reactTag});
   }
   _playbackStalled = YES;
 }
@@ -572,7 +578,9 @@ static NSString *const timedMetadata = @"timedMetadata";
 - (void)playerItemDidReachEnd:(NSNotification *)notification
 {
   if(self.onVideoEnd) {
-      self.onVideoEnd(@{@"target": self.reactTag});
+      self.onVideoEnd(@{
+              @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)_playerItem.asset).URL].absoluteString,
+              @"target": self.reactTag});
   }
 
   if (_repeat) {
