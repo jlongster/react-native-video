@@ -194,6 +194,7 @@ static NSString *const timedMetadata = @"timedMetadata";
       self.onVideoProgress(@{
                              @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)_playerItem.asset).URL].absoluteString,
                              @"currentTime": [NSNumber numberWithFloat:CMTimeGetSeconds(currentTime)],
+                             @"duration": [NSNumber numberWithFloat:duration],
                              @"playableDuration": [self calculatePlayableDuration],
                              @"atValue": [NSNumber numberWithLongLong:currentTime.value],
                              @"atTimescale": [NSNumber numberWithInt:currentTime.timescale],
