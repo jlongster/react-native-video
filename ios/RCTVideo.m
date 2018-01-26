@@ -568,24 +568,28 @@ static NSString *const timedMetadata = @"timedMetadata";
 
 - (void)playbackStalled:(NSNotification *)notification
 {
+  AVPlayerItem *item = [notification object];
+
   if(self.onPlaybackStalled) {
     self.onPlaybackStalled(@{
-            @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)_playerItem.asset).URL].absoluteString,
+            @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)item.asset).URL].absoluteString,
             @"target": self.reactTag});
   }
+
   _playbackStalled = YES;
 }
 
 - (void)playerItemDidReachEnd:(NSNotification *)notification
 {
+  AVPlayerItem *item = [notification object];
+
   if(self.onVideoEnd) {
       self.onVideoEnd(@{
-              @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)_playerItem.asset).URL].absoluteString,
+              @"url": [[RCTVideoLoader sharedInstance] removeCustomPrefix:((AVURLAsset*)item.asset).URL].absoluteString,
               @"target": self.reactTag});
   }
 
   if (_repeat) {
-    AVPlayerItem *item = [notification object];
     [item seekToTime:kCMTimeZero];
   }
 }
