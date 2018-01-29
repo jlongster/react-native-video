@@ -71,6 +71,12 @@
            loadingRequest.contentInformationRequest.contentLength = cachedAsset.contentLength;
            [loadingRequest finishLoading];
            [finishedRequests addObject:loadingRequest];
+
+           [_eventDispatcher sendAppEventWithName:@"networkContentInfoFinished" body:@{
+                   @"contentType": cachedAsset.contentType,
+                   @"contentLength": [NSNumber numberWithInteger:cachedAsset.contentLength],
+                   @"url": [self getRequestURL:loadingRequest]
+           }];
         }
     }];
     [blockedRequests removeObjectsInArray:finishedRequests];
@@ -82,6 +88,11 @@
 
     [cachedAsset.data appendData:data];
     
+    [_eventDispatcher sendAppEventWithName:@"receivedBytes" body:@{
+         @"length": [NSNumber numberWithInteger:data.length],
+         @"url": url
+    }];
+
     NSMutableArray *blockedRequests = self.blockedLoadingRequests[url];
     NSMutableArray *finishedRequests = [NSMutableArray new];
     [blockedRequests enumerateObjectsUsingBlock:^(AVAssetResourceLoadingRequest* loadingRequest, NSUInteger idx, BOOL *stop) {
@@ -123,7 +134,18 @@
           [cachedAsset.data subdataWithRange: NSMakeRange(dataRequest.currentOffset, MIN(neededBytes, availableBytes))]
         ];
 
+        [_eventDispatcher sendAppEventWithName:@"respondWithBytes" body:@{
+             @"offset": [NSNumber numberWithInteger:dataRequest.currentOffset],
+             @"length": [NSNumber numberWithInteger:MIN(neededBytes, availableBytes)],
+             @"requestedLength": [NSNumber numberWithInteger:loadingRequest.dataRequest.requestedLength],
+             @"url": [self getRequestURL:loadingRequest]
+        }];
+
         if(neededBytes <= availableBytes) {
+            [_eventDispatcher sendAppEventWithName:@"finishedLoading" body:@{
+                 @"url": [self getRequestURL:loadingRequest]
+            }];
+
             [loadingRequest finishLoading];
             return YES;
         }
@@ -193,6 +215,12 @@
         loadingRequest.contentInformationRequest.contentType = cachedAsset.contentType;
         loadingRequest.contentInformationRequest.contentLength = cachedAsset.contentLength;
         [loadingRequest finishLoading];
+
+        [_eventDispatcher sendAppEventWithName:@"memoryContentInfoFinished" body:@{
+                @"contentType": cachedAsset.contentType,
+                @"contentLength": [NSNumber numberWithInteger:cachedAsset.contentLength],
+                @"url": [self getRequestURL:loadingRequest]
+        }];
     }
     else if(![self sendAvailableBytes:loadingRequest cachedAsset:cachedAsset]) {
         [self addBlockedLoadingRequest:loadingRequest];
@@ -220,17 +248,6 @@
 - (BOOL)resourceLoader:(AVAssetResourceLoader *)resourceLoader shouldWaitForLoadingOfRequestedResource:(AVAssetResourceLoadingRequest *)loadingRequest
 {
     NSURL *interceptedURL = loadingRequest.request.URL;
-
-    // Use the following code to log messages in the frontend to debug
-    // issues. Copy this around to wherever you need to log and change
-    // the params.
-    //
-    // [_eventDispatcher sendAppEventWithName:@"video-log" body:@{
-    //            @"msg": [NSString stringWithFormat:@"AVAsset request, offset: %lli length: %lli",
-    //                              loadingRequest.dataRequest.requestedOffset,
-    //                              loadingRequest.dataRequest.requestedLength],
-    //       @"url": [self getRequestURL:loadingRequest]
-    //     }];
 
     if(loadingRequest.contentInformationRequest != nil || loadingRequest.dataRequest != nil) {
         return [self handleRequest:loadingRequest];
