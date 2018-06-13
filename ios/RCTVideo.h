@@ -30,6 +30,7 @@
 - (AVPlayerViewController*)createPlayerViewController:(AVPlayer*)player withPlayerItem:(AVPlayerItem*)playerItem;
 - (void)preload:(NSString*)url;
 
++ (NSString *) videoProgressEventName;
 
 
 @end

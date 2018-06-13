@@ -53,6 +53,11 @@ static NSString *const timedMetadata = @"timedMetadata";
   NSMutableDictionary *_playerItemCache;
 }
 
+static NSString *_progressEventName = @"RCTVideo-progress";
++ (NSString *) videoProgressEventName {
+    return _progressEventName;
+}
+
 - (NSMutableDictionary*)playerItemCache {
     if(_playerItemCache == nil) {
         _playerItemCache = [NSMutableDictionary dictionary];
@@ -201,6 +206,10 @@ static NSString *const timedMetadata = @"timedMetadata";
                              @"target": self.reactTag
                             });
    }
+
+   [[NSNotificationCenter defaultCenter]
+       postNotificationName:RCTVideo.videoProgressEventName
+                     object:[NSNumber numberWithFloat:CMTimeGetSeconds(currentTime)]];
 }
 
 /*!
