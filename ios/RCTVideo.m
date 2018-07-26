@@ -161,7 +161,6 @@ static NSString *const timedMetadata = @"timedMetadata";
 
 - (void)applicationWillResignActive:(NSNotification *)notification
 {
-  [_player pause];
 }
 
 - (void)applicationDidEnterBackground:(NSNotification *)notification
