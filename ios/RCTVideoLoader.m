@@ -127,8 +127,8 @@
     AVAssetResourceLoadingDataRequest *dataRequest = loadingRequest.dataRequest;
     if(dataRequest.currentOffset < cachedAsset.data.length - 1) {
         long long totalLength = dataRequest.requestedOffset + dataRequest.requestedLength;
-        long long neededBytes = totalLength - dataRequest.currentOffset;
-        long long availableBytes = cachedAsset.data.length - dataRequest.currentOffset;
+        long long neededBytes = MAX(totalLength - dataRequest.currentOffset, 0);
+        long long availableBytes = MAX(cachedAsset.data.length - dataRequest.currentOffset, 0);
 
         [dataRequest respondWithData:
           [cachedAsset.data subdataWithRange: NSMakeRange(dataRequest.currentOffset, MIN(neededBytes, availableBytes))]
